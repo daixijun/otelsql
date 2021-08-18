@@ -5,10 +5,10 @@ import (
 	"database/sql"
 	"fmt"
 	"log"
-	"time"
 
 	"github.com/daixijun/otelsql"
 	"github.com/mattn/go-sqlite3"
+	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/exporters/stdout/stdouttrace"
 	sdktrace "go.opentelemetry.io/otel/sdk/trace"
 )
@@ -20,30 +20,34 @@ func main() {
 	if err != nil {
 		log.Fatalf("failed to initialize stdout export: %v", err)
 	}
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
 
 	tp := sdktrace.NewTracerProvider(
 		sdktrace.WithSampler(sdktrace.AlwaysSample()),
 		sdktrace.WithBatcher(exp),
 	)
+	otel.SetTracerProvider(tp)
 
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx, span := tp.Tracer("exmaple").Start(ctx, "otelexample")
+	defer span.End()
+
 	defer func(ctx context.Context) {
 		// Do not make the application hang when it is shutdown.
-		ctx, cancel = context.WithTimeout(ctx, time.Second*5)
-		defer cancel()
+		// ctx, cancel = context.WithTimeout(ctx, time.Second*5)
+		// defer cancel()
 		if err := tp.Shutdown(ctx); err != nil {
 			panic(err)
 		}
 	}(ctx)
 
-	otelsql.Register(
-		"otelsqlite3",
+	driverName := otelsql.Register(
+		"sqlite3",
 		&sqlite3.SQLiteDriver{},
-		otelsql.WithTraceProvider(tp),
+		// otelsql.WithTraceProvider(tp),
 	)
 
-	db, err := sql.Open("otelsqlite3", ":memory:")
+	db, err := sql.Open(driverName, ":memory:")
 	if err != nil {
 		panic(err)
 	}

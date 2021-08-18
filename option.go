@@ -5,12 +5,12 @@ import (
 	"go.opentelemetry.io/otel/trace"
 )
 
-type traceAttributes []attribute.KeyValue
+// type traceAttributes []attribute.KeyValue
 
 // Config is used to configure the go-restful middleware.
 type options struct {
 	traceProvider   trace.TracerProvider
-	traceAttributes traceAttributes
+	traceAttributes []attribute.KeyValue
 }
 
 // Option specifies instrumentation configuration options.
