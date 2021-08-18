@@ -5,41 +5,43 @@ import (
 	"database/sql"
 	"fmt"
 	"log"
-	"otelsql"
+	"time"
 
+	"github.com/daixijun/otelsql"
 	"github.com/mattn/go-sqlite3"
-	"go.opentelemetry.io/otel/api/correlation"
-	"go.opentelemetry.io/otel/api/global"
-	"go.opentelemetry.io/otel/api/trace"
-	"go.opentelemetry.io/otel/exporters/stdout"
-	"go.opentelemetry.io/otel/label"
-)
-
-var (
-	fooKey     = label.Key("ex.com/foo")
-	barKey     = label.Key("ex.com/bar")
-	anotherKey = label.Key("ex.com/another")
+	"go.opentelemetry.io/otel/exporters/stdout/stdouttrace"
+	sdktrace "go.opentelemetry.io/otel/sdk/trace"
 )
 
 func main() {
-	pusher, err := stdout.InstallNewPipeline([]stdout.Option{
-		stdout.WithQuantiles([]float64{0.5, 0.9, 0.99}),
-		stdout.WithPrettyPrint(),
-	}, nil)
-	if err != nil {
-		log.Fatalf("failed to initialize stdout export pipeline: %v", err)
-	}
-	defer pusher.Stop()
-
-	opts := otelsql.WithTraceProvider(global.TraceProvider())
-	otelsql.Register("otelsqlite3", &sqlite3.SQLiteDriver{}, opts)
-
-	ctx := context.Background()
-	ctx = correlation.NewContext(ctx,
-		fooKey.String("foo1"),
-		barKey.String("bar1"),
+	exp, err := stdouttrace.New(
+		stdouttrace.WithPrettyPrint(),
 	)
-	ctx = example(ctx)
+	if err != nil {
+		log.Fatalf("failed to initialize stdout export: %v", err)
+	}
+
+	tp := sdktrace.NewTracerProvider(
+		sdktrace.WithSampler(sdktrace.AlwaysSample()),
+		sdktrace.WithBatcher(exp),
+	)
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	defer func(ctx context.Context) {
+		// Do not make the application hang when it is shutdown.
+		ctx, cancel = context.WithTimeout(ctx, time.Second*5)
+		defer cancel()
+		if err := tp.Shutdown(ctx); err != nil {
+			panic(err)
+		}
+	}(ctx)
+
+	otelsql.Register(
+		"otelsqlite3",
+		&sqlite3.SQLiteDriver{},
+		otelsql.WithTraceProvider(tp),
+	)
 
 	db, err := sql.Open("otelsqlite3", ":memory:")
 	if err != nil {
@@ -71,7 +73,7 @@ func main() {
 			panic(err)
 		}
 	}
-	tx.Commit()
+	_ = tx.Commit()
 
 	rows, err := db.QueryContext(ctx, "select id, name from bar")
 	if err != nil {
@@ -97,7 +99,7 @@ func main() {
 	}
 	defer stmt.Close()
 	var name string
-	err = stmt.QueryRow("3").Scan(&name)
+	err = stmt.QueryRow("2").Scan(&name)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -131,14 +133,4 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
-}
-
-func example(ctx context.Context) context.Context {
-	var span trace.Span
-	ctx, span = global.Tracer("my-awesome-tracer-here").Start(ctx, "operation")
-	defer span.End()
-
-	span.AddEvent(ctx, "Nice operation!", label.Int("bogons", 100))
-	span.SetAttributes(anotherKey.String("zebra"))
-	return ctx
 }

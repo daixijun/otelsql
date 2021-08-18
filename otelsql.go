@@ -6,26 +6,26 @@ import (
 	"database/sql/driver"
 
 	"github.com/ngrok/sqlmw"
-	"go.opentelemetry.io/otel/api/global"
-	"go.opentelemetry.io/otel/api/trace"
-	"go.opentelemetry.io/otel/label"
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/trace"
 )
 
 const (
-	defaultTracerName = "go.opentelemetry.io/contrib/instrumentation/database/sql"
+	defaultTracerName = "github.com/daixijun/otelsql"
 )
 
 func Register(drivername string, dri driver.Driver, opts ...Option) {
-	cfg := config{}
+	o := options{}
 	for _, opt := range opts {
-		opt(&cfg)
+		opt(&o)
 	}
-	if cfg.traceProvider == nil {
-		cfg.traceProvider = global.TraceProvider()
+	if o.traceProvider == nil {
+		o.traceProvider = otel.GetTracerProvider()
 	}
 	sqlInt := &sqlInterceptor{
-		tr:              cfg.traceProvider.Tracer(defaultTracerName),
-		traceAttributes: cfg.traceAttributes,
+		tr:              o.traceProvider.Tracer(defaultTracerName),
+		traceAttributes: o.traceAttributes,
 	}
 	sql.Register(drivername, sqlmw.Driver(dri, sqlInt))
 }
@@ -44,7 +44,7 @@ func (in *sqlInterceptor) ConnBeginTx(ctx context.Context, conn driver.ConnBegin
 }
 
 func (in *sqlInterceptor) ConnPrepareContext(ctx context.Context, conn driver.ConnPrepareContext, query string) (driver.Stmt, error) {
-	traceAttributes := append(in.traceAttributes, label.String("sql.query", query))
+	traceAttributes := append(in.traceAttributes, attribute.String("sql.query", query))
 	ctx, span := in.tr.Start(ctx, "ConnPrepareContext", trace.WithSpanKind(trace.SpanKindClient),
 		trace.WithAttributes(traceAttributes...))
 	defer span.End()
@@ -59,7 +59,7 @@ func (in *sqlInterceptor) ConnPing(ctx context.Context, conn driver.Pinger) erro
 }
 
 func (in *sqlInterceptor) ConnExecContext(ctx context.Context, conn driver.ExecerContext, query string, args []driver.NamedValue) (driver.Result, error) {
-	traceAttributes := append(in.traceAttributes, label.String("sql.query", query))
+	traceAttributes := append(in.traceAttributes, attribute.String("sql.query", query))
 	ctx, span := in.tr.Start(ctx, "ConnExecContext", trace.WithSpanKind(trace.SpanKindClient),
 		trace.WithAttributes(traceAttributes...))
 	defer span.End()
@@ -67,7 +67,7 @@ func (in *sqlInterceptor) ConnExecContext(ctx context.Context, conn driver.Exece
 }
 
 func (in *sqlInterceptor) ConnQueryContext(ctx context.Context, conn driver.QueryerContext, query string, args []driver.NamedValue) (driver.Rows, error) {
-	traceAttributes := append(in.traceAttributes, label.String("sql.query", query))
+	traceAttributes := append(in.traceAttributes, attribute.String("sql.query", query))
 	ctx, span := in.tr.Start(ctx, "ConnQueryContext", trace.WithSpanKind(trace.SpanKindClient),
 		trace.WithAttributes(traceAttributes...))
 	defer span.End()
