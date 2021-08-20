@@ -108,18 +108,18 @@ func (in *sqlInterceptor) ConnectorConnect(ctx context.Context, connect driver.C
 }
 
 func (in *sqlInterceptor) ResultLastInsertId(res driver.Result) (int64, error) {
-	ctx := context.Background()
-	_, span := in.tracer.Start(ctx, "ResultLastInsertId", trace.WithSpanKind(trace.SpanKindClient),
-		trace.WithAttributes(in.traceAttributes...))
-	defer span.End()
+	// ctx := context.Background()
+	// _, span := in.tracer.Start(ctx, "ResultLastInsertId", trace.WithSpanKind(trace.SpanKindClient),
+	// 	trace.WithAttributes(in.traceAttributes...))
+	// defer span.End()
 	return res.LastInsertId()
 }
 
 func (in *sqlInterceptor) ResultRowsAffected(res driver.Result) (int64, error) {
-	ctx := context.Background()
-	_, span := in.tracer.Start(ctx, "ResultRowsAffected", trace.WithSpanKind(trace.SpanKindClient),
-		trace.WithAttributes(in.traceAttributes...))
-	defer span.End()
+	// ctx := context.Background()
+	// _, span := in.tracer.Start(ctx, "ResultRowsAffected", trace.WithSpanKind(trace.SpanKindClient),
+	// 	trace.WithAttributes(in.traceAttributes...))
+	// defer span.End()
 	return res.RowsAffected()
 }
 
