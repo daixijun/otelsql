@@ -133,6 +133,16 @@ func (in *sqlInterceptor) RowsNext(ctx context.Context, rows driver.Rows, dest [
 	return rows.Next(dest)
 }
 
+func (in *sqlInterceptor) RowsClose(ctx context.Context, rows driver.Rows) error {
+	span := trace.SpanFromContext(ctx)
+	if span.IsRecording() {
+		_, span = in.tracer.Start(ctx, "RowsClose", trace.WithSpanKind(trace.SpanKindClient),
+			trace.WithAttributes(in.traceAttributes...))
+	}
+	defer span.End()
+	return rows.Close()
+}
+
 func (in *sqlInterceptor) StmtExecContext(ctx context.Context, stmt driver.StmtExecContext, _ string, args []driver.NamedValue) (driver.Result, error) {
 	span := trace.SpanFromContext(ctx)
 	if span.IsRecording() {
